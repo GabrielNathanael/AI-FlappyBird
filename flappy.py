@@ -14,7 +14,7 @@ PIPE_GAP = 120
 PIPE_INTERVAL = 1500
 PIPE_SPEED = 2
 GRAVITY = 0.3
-JUMP_STRENGTH = -6.5
+JUMP_STRENGTH = -6
 
 screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
 clock = pygame.time.Clock()
@@ -77,7 +77,7 @@ def main():
                     pipe.move(PIPE_SPEED)
                 pipe.draw()
 
-        # Check for collisions
+        # # Check for collisions
         for top, bottom in pipes:
             if player.rect.colliderect(top.rect) or player.rect.colliderect(bottom.rect):
                 game_over = True
