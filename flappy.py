@@ -41,19 +41,28 @@ score = 0
 game_over = False
 
 def spawn_pipe():
-    min_gap_y = 80
-    max_gap_y = SCREEN_HEIGHT - floor.height - PIPE_GAP - 50
+    pipe_image = pygame.image.load(pipe_path).convert_alpha()
+    pipe_height = pipe_image.get_height()
+
+    min_gap_y = 100 + PIPE_GAP // 2
+    max_gap_y = floor.y - PIPE_GAP // 2 - 20
+
+    # Debug print
+    # print(f"min_gap_y = {min_gap_y}, max_gap_y = {max_gap_y}, floor.y = {floor.y}")
+
     if max_gap_y <= min_gap_y:
+        # fallback nilai supaya gak error
         gap_y = min_gap_y
     else:
         gap_y = random.randint(min_gap_y, max_gap_y)
 
-    # Munculkan di luar layar kanan agar smooth
-    pipe_x = SCREEN_WIDTH + 40
-    top_pipe = Pipe(screen, pipe_path, pipe_x, gap_y - PIPE_GAP // 2, flipped=True)
-    bottom_pipe = Pipe(screen, pipe_path, pipe_x, gap_y + PIPE_GAP // 2)
-    pipes.append((top_pipe, bottom_pipe))
+    top_pipe_y = gap_y - PIPE_GAP // 2 - pipe_height
+    bottom_pipe_y = gap_y + PIPE_GAP // 2
 
+    top_pipe = Pipe(screen, pipe_path, SCREEN_WIDTH, top_pipe_y, flipped=True)
+    bottom_pipe = Pipe(screen, pipe_path, SCREEN_WIDTH, bottom_pipe_y)
+    pipes.append((top_pipe, bottom_pipe))
+    
 def reset_game():
     global pipes, score, game_over, last_pipe_time, player
     pipes = []

@@ -2,190 +2,217 @@ import pygame
 import neat
 import os
 import random
-import player
-import pipe
-import floor
-import background
-import score
 
-# Screen size
-SCREEN_WIDTH = 400
-SCREEN_HEIGHT = 600
+from player import Player
+from pipe import Pipe
+from floor import Floor
+from background import Background
 
-# Load font
-FONT_PATH = os.path.join("assets", "fonts", "flappy.ttf")
-
-# Game constants
-GRAVITY = 0.6
-JUMP_STRENGTH = -10
-PIPE_GAP = 150
-PIPE_FREQUENCY = 1500  # milliseconds
-
-# Initialize pygame font
 pygame.init()
-FONT = pygame.font.Font(FONT_PATH, 40)
+pygame.font.init()
 
-# Define the main function to train NEAT
-def run(config_file):
-    config = neat.config.Config(
-        neat.DefaultGenome,
-        neat.DefaultReproduction,
-        neat.DefaultSpeciesSet,
-        neat.DefaultStagnation,
-        config_file,
-    )
+SCREEN_WIDTH = 288
+SCREEN_HEIGHT = 512
+FLOOR_HEIGHT = 112
+WIN = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+pygame.display.set_caption("Flappy Bird AI")
 
-    # Create population
-    p = neat.Population(config)
+BIRD_IMGS = [
+    pygame.image.load(os.path.join("assets", "sprites", "yellowbird-upflap.png")).convert_alpha(),
+    pygame.image.load(os.path.join("assets", "sprites", "yellowbird-midflap.png")).convert_alpha(),
+    pygame.image.load(os.path.join("assets", "sprites", "yellowbird-downflap.png")).convert_alpha(),
+]
+Pipe.load_images()
 
-    # Add reporters for progress in terminal
-    p.add_reporter(neat.StdOutReporter(True))
-    stats = neat.StatisticsReporter()
-    p.add_reporter(stats)
+FONT = pygame.font.SysFont("Arial", 24)
 
-    # Run NEAT
-    winner = p.run(eval_genomes, 50)  # max 50 generations
+generation = 0
+FPS = 60 # FPS game
 
-    print('\nBest genome:\n{!s}'.format(winner))
+# --- GLOBAL: BEST SCORE KESELURUHAN ---
+best_overall_score = 0
 
+# --- PENGATURAN GAME YANG KONSTAN (HARDCODED SESUAI PERMINTAAN) ---
+# Jarak Pipa Horizontal (sesuai gambar yang Anda inginkan: sangat rapat)
+# Ini adalah jarak dari sisi kanan pipa sebelumnya ke sisi kiri pipa baru.
+# Lebar pipa = 52 piksel. PIPE_SPAWN_MIN_GAP_X harus lebih besar dari lebar pipa.
+PIPE_SPAWN_MIN_GAP_X = 100 # Jarak X min antara pipa
+PIPE_SPAWN_MAX_GAP_X = 120 # Jarak X max antara pipa
+
+def draw_window(screen, birds, pipes, background, floor, score, gen_num, alive_count, current_best_score):
+    # PERBAIKAN: Tambahkan best_overall_score ke deklarasi global di sini
+    global generation, best_overall_score 
+
+    background.draw()
+    for pipe in pipes:
+        pipe.draw(screen)
+    floor.draw()
+    for bird in birds:
+        bird.draw(screen) 
+    
+    score_text = FONT.render(f"Score: {score}", True, (255, 255, 255))
+    best_score_text = FONT.render(f"Best: {current_best_score}", True, (255, 255, 255))
+    gen_text = FONT.render(f"Gen: {gen_num}", True, (255, 255, 255))
+    alive_text = FONT.render(f"Alive: {alive_count}", True, (255, 255, 255))
+    
+    screen.blit(score_text, (10, 10))
+    screen.blit(best_score_text, (10, 40)) 
+    screen.blit(gen_text, (10, 70)) 
+    screen.blit(alive_text, (10, 100)) 
+    
+    pygame.display.update()
 
 def eval_genomes(genomes, config):
+    # PERBAIKAN: Tambahkan best_overall_score ke deklarasi global di sini
+    global generation, best_overall_score
+
+    generation += 1
+
     nets = []
-    birds = []
     ge = []
-
-    screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-    pygame.display.set_caption("Flappy Bird NEAT Training")
-
-    bg = background.Background(screen, "assets/sprites/background-day.png", SCREEN_WIDTH, SCREEN_HEIGHT)
-    fl = floor.Floor(screen, "assets/sprites/base.png", SCREEN_HEIGHT - 100)
-    pipes = []
-
-    clock = pygame.time.Clock()
-
-    score_value = 0
-    score_display = score.Score(screen, FONT)
-
-    last_pipe_time = pygame.time.get_ticks()
+    birds = [] 
 
     for genome_id, genome in genomes:
-        genome.fitness = 0  # Start fitness at 0
+        genome.fitness = 0.0
         net = neat.nn.FeedForwardNetwork.create(genome, config)
         nets.append(net)
-        birds.append(player.Player(screen, 50, SCREEN_HEIGHT // 2, GRAVITY, JUMP_STRENGTH))
+        birds.append(Player(WIN, BIRD_IMGS, 60, SCREEN_HEIGHT // 2, gravity=0.5, jump_strength=8))
         ge.append(genome)
 
+    background = Background(WIN, "assets/sprites/background-day.png")
+    floor = Floor(WIN, "assets/sprites/base.png", SCREEN_HEIGHT - FLOOR_HEIGHT)
+    pipes = [] 
+
+    pipes.append(Pipe(SCREEN_WIDTH + 200, SCREEN_HEIGHT, FLOOR_HEIGHT)) # Pipa pertama muncul
+    
+    score_this_generation = 0 
     run = True
-    while run and len(birds) > 0:
-        clock.tick(30)
+    clock = pygame.time.Clock()
+
+    while run and len(birds) > 0: 
+        clock.tick(FPS)
+
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 run = False
                 pygame.quit()
                 quit()
 
-        # Spawn pipes
-        current_time = pygame.time.get_ticks()
-        if current_time - last_pipe_time > PIPE_FREQUENCY:
-            pipe_height = random.randint(100, SCREEN_HEIGHT - 100 - PIPE_GAP - fl.height)
-            pipes.append(pipe.Pipe(screen, SCREEN_WIDTH, pipe_height, False))
-            pipes.append(pipe.Pipe(screen, SCREEN_WIDTH, pipe_height - 320, True))  # top pipe rotated
-            last_pipe_time = current_time
-
-        # Move background and floor
-        bg.move()
-        fl.move()
-
-        # Move pipes
-        pipes_to_remove = []
-        for p in pipes:
-            p.move()
-            # Remove offscreen pipes
-            if p.x + p.width < 0:
-                pipes_to_remove.append(p)
-
-        for p in pipes_to_remove:
-            pipes.remove(p)
-
-        # Move birds and give fitness reward for staying alive
-        for i, bird in enumerate(birds):
-            bird.move()
-            ge[i].fitness += 0.1  # reward for staying alive
-
-            # Neural net input:
-            # Find closest pipe ahead
-            pipe_ind = 0
-            while pipe_ind < len(pipes) and pipes[pipe_ind].x + pipes[pipe_ind].width < bird.x:
-                pipe_ind += 1
-
-            if pipe_ind >= len(pipes):
-                pipe_ind = 0
-
-            # Inputs: bird y, distance to pipe top and bottom gap, pipe x distance
-            if pipe_ind < len(pipes):
-                top_pipe = pipes[pipe_ind] if pipes[pipe_ind].is_top else pipes[pipe_ind+1]
-                bottom_pipe = pipes[pipe_ind+1] if pipes[pipe_ind].is_top else pipes[pipe_ind]
-
-                # Normalize inputs between 0 and 1 for NN stability
-                bird_y = bird.y / SCREEN_HEIGHT
-                dist_pipe_x = (pipes[pipe_ind].x - bird.x) / SCREEN_WIDTH
-                top_pipe_bottom_y = (top_pipe.y + top_pipe.height) / SCREEN_HEIGHT
-                bottom_pipe_top_y = bottom_pipe.y / SCREEN_HEIGHT
-
-                inputs = [bird_y, dist_pipe_x, top_pipe_bottom_y, bottom_pipe_top_y]
-
-                output = nets[i].activate(inputs)
-                if output[0] > 0.5:
-                    bird.jump()
-
-            # Check collision with pipes or floor
-            bird_rect = bird.get_rect()
-            collided = False
-            for p in pipes:
-                if bird_rect.colliderect(p.get_rect()):
-                    collided = True
+        current_pipe_for_input = None
+        if birds: 
+            for p_idx, p in enumerate(pipes):
+                if p.x + p.IMAGE.get_width() > birds[0].x: 
+                    current_pipe_for_input = p
                     break
-            if bird.y + bird.height >= SCREEN_HEIGHT - fl.height:
-                collided = True
+            if not current_pipe_for_input and pipes:
+                current_pipe_for_input = pipes[-1]
 
-            if collided:
-                ge[i].fitness -= 1
-                birds.pop(i)
-                nets.pop(i)
-                ge.pop(i)
-                continue
+        still_alive_birds = []
+        still_alive_nets = []
+        still_alive_ge = []
 
-            # Score update: if bird passed pipe
-            for p in pipes:
-                if not p.passed and p.x + p.width < bird.x:
-                    p.passed = True
-                    score_value += 1
-                    for g in ge:
-                        g.fitness += 5
+        for i, bird in enumerate(birds):
+            ge[i].fitness = max(ge[i].fitness, bird.x) 
 
-        # Draw everything
-        screen.fill((0, 0, 0))
-        bg.draw()
-        for p in pipes:
-            p.draw()
-        fl.draw()
-        for bird in birds:
-            bird.draw()
-        score_display.draw(score_value)
+            bird.move()
 
-        # Draw info text
-        alive_text = FONT.render(f"Alive: {len(birds)}", True, (255, 255, 255))
-        gen_text = FONT.render(f"Gen: {neat.generation}", True, (255, 255, 255))
-        best_text = FONT.render(f"Best: {max([g.fitness for g in ge]) if ge else 0:.2f}", True, (255, 255, 255))
+            inputs = []
+            if current_pipe_for_input:
+                inputs = (
+                    bird.y,
+                    abs(bird.y - current_pipe_for_input.height),
+                    abs(bird.y - current_pipe_for_input.bottom)
+                )
+            else:
+                inputs = (bird.y, 0.0, 0.0) 
 
-        screen.blit(alive_text, (10, 10))
-        screen.blit(gen_text, (10, 50))
-        screen.blit(best_text, (10, 90))
+            out = nets[i].activate(inputs)
+            if out[0] > 0.0:
+                bird.jump()
+                
+            if bird.y < SCREEN_HEIGHT * 0.05:
+                ge[i].fitness -= 1.0 
 
-        pygame.display.update()
+            if current_pipe_for_input and (current_pipe_for_input.x - bird.x) > SCREEN_WIDTH * 0.5:
+                ge[i].fitness -= 0.5 
 
+            is_dead = False
+
+            for pipe in pipes: 
+                if pipe.collide(bird):
+                    ge[i].fitness = -1.0 
+                    is_dead = True
+                    break 
+            
+            if not is_dead: 
+                bot = bird.y + bird.rect.height
+                if bot >= SCREEN_HEIGHT - FLOOR_HEIGHT or bird.y < 0:
+                    ge[i].fitness = -1.0 
+                    is_dead = True
+            
+            if not is_dead:
+                still_alive_birds.append(bird)
+                still_alive_nets.append(nets[i])
+                still_alive_ge.append(ge[i])
+            
+        birds = still_alive_birds
+        nets = still_alive_nets
+        ge = still_alive_ge
+
+        background.update()
+        floor.update()
+
+        if pipes:
+            # Pipa baru ditambahkan ketika pipa paling kanan sudah mencapai titik tertentu, dan ada ruang untuk pipa baru
+            # Ini akan menciptakan aliran pipa yang kontinu dan rapat seperti Flappy Bird asli
+            # Perbaikan logika ini: memastikan pipa muncul dari luar layar dengan jarak yang benar
+            # Trigger penambahan pipa ketika pipa paling kanan sudah cukup masuk ke layar (misal, 1/3 layar)
+            # Dan tambahkan pipa baru pada posisi SCREEN_WIDTH + jarak_antar_pipa yang diinginkan
+            if pipes[-1].x < SCREEN_WIDTH - (SCREEN_WIDTH / 3): 
+                pipes.append(Pipe(SCREEN_WIDTH + random.randint(PIPE_SPAWN_MIN_GAP_X, PIPE_SPAWN_MAX_GAP_X), SCREEN_HEIGHT, FLOOR_HEIGHT))
+            
+            rem_pipes = []
+            for pipe in pipes:
+                pipe.move()
+                
+                if not pipe.passed and birds and pipe.x + pipe.IMAGE.get_width() < birds[0].x: 
+                    pipe.passed = True
+                    score_this_generation += 1 
+                    for g_item in ge: 
+                        g_item.fitness += 5.0
+                
+                if pipe.off_screen():
+                    rem_pipes.append(pipe)
+            
+            for r in rem_pipes:
+                pipes.remove(r)
+        
+        draw_window(WIN, birds, pipes, background, floor, score_this_generation, generation, len(birds), best_overall_score)
+
+    if not run:
+        return
+
+    best_overall_score = max(best_overall_score, score_this_generation)
+
+def run_neat(config_path):
+    config = neat.config.Config(
+        neat.DefaultGenome, neat.DefaultReproduction,
+        neat.DefaultSpeciesSet, neat.DefaultStagnation,
+        config_path
+    )
+    pop = neat.Population(config)
+
+    pop.add_reporter(neat.StdOutReporter(True))
+    stats = neat.StatisticsReporter()
+    pop.add_reporter(stats)
+    pop.add_reporter(neat.Checkpointer(20))
+
+    print("Starting NEAT training with CONSTANT DIFFICULTY (as per request)...")
+    winner = pop.run(eval_genomes, 3000)
+
+    print("\nBest Genome found:\n", winner)
 
 if __name__ == "__main__":
     local_dir = os.path.dirname(__file__)
-    config_path = os.path.join(local_dir, "neat-config.txt")
-    run(config_path)
+    config_path = os.path.join(local_dir, "config-feedforward.txt")
+    run_neat(config_path)
