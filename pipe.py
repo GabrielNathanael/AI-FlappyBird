@@ -7,12 +7,16 @@ class Pipe:
         self.flipped = flipped
         if flipped:
             self.image = pygame.transform.flip(self.image, False, True)
-            self.rect = self.image.get_rect(bottomleft=(x, y))
-        else:
-            self.rect = self.image.get_rect(topleft=(x, y))
+        self.x = x
+        self.y = y
+        self.rect = self.image.get_rect(midbottom=(self.x, self.y) if flipped else (self.x, self.y))
 
     def move(self, speed):
-        self.rect.x -= speed
+        self.x -= speed
+        if self.flipped:
+            self.rect.midbottom = (self.x, self.y)
+        else:
+            self.rect.midtop = (self.x, self.y)
 
     def draw(self):
         self.screen.blit(self.image, self.rect)

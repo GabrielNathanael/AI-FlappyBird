@@ -5,6 +5,8 @@ class Background:
         self.screen = screen
         self.image = pygame.image.load(image_path).convert()
         self.image = pygame.transform.scale(self.image, (width, height))
+        self.width = width
+        self.height = height
 
     def draw(self):
         self.screen.blit(self.image, (0, 0))

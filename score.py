@@ -3,13 +3,22 @@ import pygame
 class Score:
     def __init__(self, screen, number_paths):
         self.screen = screen
-        self.digits = [pygame.image.load(p).convert_alpha() for p in number_paths]
+        self.numbers = [pygame.image.load(path).convert_alpha() for path in number_paths]
 
     def draw(self, score):
-        digits = list(str(score))
-        total_width = sum(self.digits[int(d)].get_width() for d in digits)
+        score_str = str(score)
+        total_width = 0
+        digits = []
+
+        # Hitung total lebar semua digit agar score bisa ditampilkan rata tengah
+        for digit_char in score_str:
+            digit = int(digit_char)
+            digits.append(self.numbers[digit])
+            total_width += self.numbers[digit].get_width()
+
         x = (self.screen.get_width() - total_width) // 2
-        for d in digits:
-            img = self.digits[int(d)]
-            self.screen.blit(img, (x, 50))
-            x += img.get_width()
+        y = 50  # posisi vertikal score
+
+        for digit_image in digits:
+            self.screen.blit(digit_image, (x, y))
+            x += digit_image.get_width()
